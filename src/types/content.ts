@@ -17,6 +17,7 @@ export interface Meditation {
   description: string;
   duration: number; // in minutes
   audioUrl: string;
+  scriptText?: string; // Full meditation script for TTS generation
   scriptureReferences: ScriptureReference[];
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   tags: string[];

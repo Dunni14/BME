@@ -11,8 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { RootState } from '../store';
-import { clearCurrentTrack } from '../store/slices/contentSlice';
+import { clearCurrentTrack, generateMeditationAudio } from '../store/slices/contentSlice';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
+import { browserVoiceService } from '../services/voiceGeneration/browserVoiceService';
 import { colors } from '../styles/colors';
 import { getGenreById, getMeditationFromGenre } from '../services/mockData';
 
@@ -48,8 +49,20 @@ export const MeditationPlayerScreen: React.FC = () => {
   const handlePlayPause = async () => {
     if (audioState.isPlaying) {
       await pause();
+      browserVoiceService.pauseSpeaking();
     } else {
-      await play();
+      // Try TTS first if meditation has script text
+      if (meditation?.scriptText) {
+        try {
+          await browserVoiceService.generateMeditationAudio(meditation);
+          // TTS doesn't use the traditional audio state, so we simulate it
+        } catch (error) {
+          console.error('TTS failed, trying regular audio:', error);
+          await play();
+        }
+      } else {
+        await play();
+      }
     }
   };
 
@@ -222,8 +235,11 @@ export const MeditationPlayerScreen: React.FC = () => {
 
         {/* Additional Controls */}
         <View style={styles.additionalControls}>
-          <TouchableOpacity style={styles.additionalButton}>
-            <Ionicons name="repeat" size={24} color={colors.textSecondary} />
+          <TouchableOpacity 
+            style={styles.additionalButton}
+            onPress={() => browserVoiceService.testVoice("This is how your meditation will sound.")}
+          >
+            <Ionicons name="volume-medium" size={24} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.additionalButton}>
             <Ionicons name="speedometer-outline" size={24} color={colors.textSecondary} />

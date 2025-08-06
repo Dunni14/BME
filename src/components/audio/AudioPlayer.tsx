@@ -1,50 +1,92 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSelector, useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch } from '../../store';
 import { useNavigation } from '@react-navigation/native';
 import { RootState } from '../../store';
-import { clearCurrentTrack } from '../../store/slices/contentSlice';
-import { useAudioPlayer } from '../../hooks/useAudioPlayer';
+import { clearCurrentTrack, generateMeditationAudio, clearAudioError } from '../../store/slices/contentSlice';
+import { browserVoiceService } from '../../services/voiceGeneration/browserVoiceService';
 import { colors } from '../../styles/colors';
 
-interface AudioPlayerProps {
-  onPlayPause?: () => void;
-  onSkipForward?: () => void;
-  onSkipBackward?: () => void;
-}
-
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({
-  onPlayPause,
-  onSkipForward,
-  onSkipBackward,
-}) => {
-  const dispatch = useDispatch();
+export const AudioPlayer: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation();
-  const { audioState, play, pause, skipForward, skipBackward } = useAudioPlayer();
-  const { currentTrack, currentMeditation, currentGenre } = useSelector((state: RootState) => state.content);
-
-  const handlePlayPause = async () => {
-    if (audioState.isPlaying) {
-      await pause();
-    } else {
-      await play();
+  const { 
+    currentTrack,
+    currentMeditation,
+    currentGenre,
+    audio: { 
+      isGenerating, 
+      currentAudioUrl, 
+      error: audioError,
+      generationProgress 
     }
-    onPlayPause?.();
+  } = useSelector((state: RootState) => state.content);
+  
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [canUseVoice, setCanUseVoice] = useState(true);
+
+  useEffect(() => {
+    // Check if browser supports speech synthesis
+    if (typeof window !== 'undefined' && !window.speechSynthesis) {
+      setCanUseVoice(false);
+      Alert.alert(
+        'Voice Not Supported',
+        'Your browser does not support text-to-speech functionality.'
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (audioError) {
+      Alert.alert('Audio Generation Failed', audioError, [
+        { text: 'OK', onPress: () => dispatch(clearAudioError()) }
+      ]);
+    }
+  }, [audioError, dispatch]);
+
+  const handleGenerateAudio = async () => {
+    if (!currentMeditation) return;
+    
+    try {
+      dispatch(generateMeditationAudio({ 
+        meditation: currentMeditation,
+        forceRegenerate: false 
+      }));
+    } catch (error) {
+      Alert.alert('Error', 'Failed to generate audio');
+    }
   };
 
-  const handleSkipForward = async () => {
-    await skipForward(15);
-    onSkipForward?.();
+  const handlePlayPause = () => {
+    if (!currentMeditation) return;
+
+    if (isPlaying) {
+      browserVoiceService.pauseSpeaking();
+      setIsPlaying(false);
+    } else {
+      // For browser TTS, we speak directly rather than playing blob URLs
+      // This is because capturing system audio in browsers is complex
+      if (currentMeditation.scriptText || currentMeditation.description) {
+        browserVoiceService.generateMeditationAudio(currentMeditation)
+          .then(() => setIsPlaying(true))
+          .catch(error => {
+            Alert.alert('Playback Error', 'Failed to play meditation audio');
+          });
+      } else {
+        Alert.alert('No Script Available', 'This meditation does not have a script available for text-to-speech.');
+      }
+    }
   };
 
-  const handleSkipBackward = async () => {
-    await skipBackward(15);
-    onSkipBackward?.();
+  const handleStop = () => {
+    browserVoiceService.stopSpeaking();
+    setIsPlaying(false);
   };
 
-  const handleClose = () => {
-    dispatch(clearCurrentTrack());
+  const handleTestVoice = () => {
+    browserVoiceService.testVoice("This is how your meditation will sound.");
   };
 
   const handlePlayerTap = () => {
@@ -62,8 +104,18 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  if (!currentTrack) {
+  if (!currentTrack || !currentMeditation) {
     return null;
+  }
+
+  if (!canUseVoice) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>
+          Voice functionality is not available in your browser
+        </Text>
+      </View>
+    );
   }
 
   return (
@@ -74,36 +126,39 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           <Text style={styles.trackTitle} numberOfLines={1}>
             {currentTrack.title}
           </Text>
-          <Text style={styles.trackTime}>
-            {formatTime(audioState.position)} / {formatTime(audioState.duration)}
+          <Text style={styles.trackSubtitle} numberOfLines={1}>
+            {currentMeditation.subtitle || `${currentMeditation.duration} min meditation`}
           </Text>
         </View>
       </TouchableOpacity>
+
+      {isGenerating && (
+        <View style={styles.generationStatus}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.generationText}>Preparing...</Text>
+        </View>
+      )}
 
       {/* Controls Section */}
       <View style={styles.controlsContainer}>
         <TouchableOpacity
           style={styles.controlButton}
-          onPress={handleSkipBackward}
-          disabled={!audioState.isLoaded}
+          onPress={handleTestVoice}
+          disabled={isGenerating}
         >
-          <Ionicons 
-            name="play-skip-back" 
-            size={20} 
-            color={audioState.isLoaded ? colors.primary : colors.textSecondary} 
-          />
+          <Ionicons name="volume-medium" size={18} color={colors.primary} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.playButton, !audioState.isLoaded && styles.disabledButton]}
+          style={[styles.playButton, isGenerating && styles.disabledButton]}
           onPress={handlePlayPause}
-          disabled={!audioState.isLoaded || audioState.isLoading}
+          disabled={isGenerating}
         >
-          {audioState.isLoading ? (
+          {isGenerating ? (
             <Ionicons name="refresh" size={20} color={colors.surface} />
           ) : (
             <Ionicons
-              name={audioState.isPlaying ? "pause" : "play"}
+              name={isPlaying ? "pause" : "play"}
               size={20}
               color={colors.surface}
             />
@@ -112,25 +167,21 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
         <TouchableOpacity
           style={styles.controlButton}
-          onPress={handleSkipForward}
-          disabled={!audioState.isLoaded}
+          onPress={handleStop}
+          disabled={!isPlaying && !isGenerating}
         >
           <Ionicons 
-            name="play-skip-forward" 
-            size={20} 
-            color={audioState.isLoaded ? colors.primary : colors.textSecondary} 
+            name="stop" 
+            size={18} 
+            color={(isPlaying || isGenerating) ? colors.error : colors.textSecondary} 
           />
         </TouchableOpacity>
 
         {/* Close Button */}
-        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-          <Ionicons name="close" size={20} color={colors.textSecondary} />
+        <TouchableOpacity style={styles.closeButton} onPress={() => dispatch(clearCurrentTrack())}>
+          <Ionicons name="close" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
-
-      {audioState.error && (
-        <Text style={styles.errorText}>{audioState.error}</Text>
-      )}
     </View>
   );
 };
@@ -144,7 +195,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    minHeight: 60,
+    minHeight: 70,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -156,7 +207,7 @@ const styles = StyleSheet.create({
   },
   trackInfo: {
     flex: 1,
-    marginRight: 16,
+    marginRight: 12,
   },
   trackDetails: {
     flex: 1,
@@ -167,15 +218,26 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 2,
   },
-  trackTime: {
+  trackSubtitle: {
     fontSize: 12,
     color: colors.textSecondary,
     fontWeight: '400',
+    fontStyle: 'italic',
+  },
+  generationStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  generationText: {
+    marginLeft: 6,
+    color: colors.primary,
+    fontSize: 12,
   },
   controlsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   controlButton: {
     padding: 8,
@@ -197,8 +259,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: colors.error,
-    fontSize: 10,
+    fontSize: 12,
     textAlign: 'center',
-    marginTop: 4,
+    padding: 16,
   },
 });

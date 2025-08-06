@@ -1,6 +1,17 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { AudioTrack } from '../../types/audio';
 import { MeditationGenre, Meditation } from '../../types/content';
+import { browserVoiceService } from '../../services/voiceGeneration/browserVoiceService';
+import { audioCacheService } from '../../services/storage/audioCacheService';
+
+interface AudioState {
+  isGenerating: boolean;
+  generatingMeditationId: string | null;
+  error: string | null;
+  availableVoices: Array<{name: string, lang: string, quality: string}>;
+  currentAudioUrl: string | null;
+  generationProgress: number;
+}
 
 interface ContentState {
   currentTrack?: AudioTrack;
@@ -13,7 +24,17 @@ interface ContentState {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  audio: AudioState;
 }
+
+const initialAudioState: AudioState = {
+  isGenerating: false,
+  generatingMeditationId: null,
+  error: null,
+  availableVoices: [],
+  currentAudioUrl: null,
+  generationProgress: 0
+};
 
 const initialState: ContentState = {
   playlist: [],
@@ -23,7 +44,51 @@ const initialState: ContentState = {
   isPlaying: false,
   currentTime: 0,
   duration: 0,
+  audio: initialAudioState,
 };
+
+// Async thunk for generating meditation audio
+export const generateMeditationAudio = createAsyncThunk(
+  'content/generateMeditationAudio',
+  async ({ meditation, forceRegenerate = false }: { 
+    meditation: Meditation, 
+    forceRegenerate?: boolean 
+  }) => {
+    try {
+      // Check if audio is already cached (unless forcing regeneration)
+      if (!forceRegenerate) {
+        const cachedUrl = await audioCacheService.getCachedAudio(meditation.id);
+        if (cachedUrl) {
+          return { audioUrl: cachedUrl, fromCache: true };
+        }
+      }
+
+      // Generate new audio
+      const generatedAudio = await browserVoiceService.generateMeditationAudio(meditation);
+      
+      // Cache the audio
+      const audioUrl = await audioCacheService.cacheAudio(meditation.id, generatedAudio);
+      
+      return { 
+        audioUrl, 
+        fromCache: false,
+        duration: generatedAudio.duration,
+        voiceUsed: generatedAudio.voiceUsed
+      };
+      
+    } catch (error: any) {
+      throw new Error(`Failed to generate audio: ${error.message}`);
+    }
+  }
+);
+
+// Async thunk for loading available voices
+export const loadAvailableVoices = createAsyncThunk(
+  'content/loadAvailableVoices',
+  async () => {
+    return browserVoiceService.getAvailableVoices();
+  }
+);
 
 const contentSlice = createSlice({
   name: 'content',
@@ -112,6 +177,48 @@ const contentSlice = createSlice({
       state.currentTime = 0;
       state.duration = 0;
     },
+
+    // Audio generation actions
+    clearAudioError: (state) => {
+      state.audio.error = null;
+    },
+    
+    setCurrentAudioUrl: (state, action: PayloadAction<string | null>) => {
+      state.audio.currentAudioUrl = action.payload;
+    },
+    
+    updateGenerationProgress: (state, action: PayloadAction<number>) => {
+      state.audio.generationProgress = action.payload;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(generateMeditationAudio.pending, (state, action) => {
+        state.audio.isGenerating = true;
+        state.audio.generatingMeditationId = action.meta.arg.meditation.id;
+        state.audio.error = null;
+        state.audio.generationProgress = 0;
+      })
+      .addCase(generateMeditationAudio.fulfilled, (state, action) => {
+        state.audio.isGenerating = false;
+        state.audio.generatingMeditationId = null;
+        state.audio.currentAudioUrl = action.payload.audioUrl;
+        state.audio.generationProgress = 100;
+        
+        // Update the meditation with the audio URL
+        if (state.currentMeditation?.id === action.meta.arg.meditation.id) {
+          state.currentMeditation.audioUrl = action.payload.audioUrl;
+        }
+      })
+      .addCase(generateMeditationAudio.rejected, (state, action) => {
+        state.audio.isGenerating = false;
+        state.audio.generatingMeditationId = null;
+        state.audio.error = action.error.message || 'Failed to generate audio';
+        state.audio.generationProgress = 0;
+      })
+      .addCase(loadAvailableVoices.fulfilled, (state, action) => {
+        state.audio.availableVoices = action.payload;
+      });
   },
 });
 
@@ -138,6 +245,11 @@ export const {
   setSearchQuery,
   setSearchResults,
   clearSearch,
+
+  // Audio generation
+  clearAudioError,
+  setCurrentAudioUrl,
+  updateGenerationProgress,
 } = contentSlice.actions;
 
 export default contentSlice.reducer;

@@ -19,6 +19,37 @@ export const christianMeditationGenres: MeditationGenre[] = [
         description: 'Surrender your worries and accomplishments to God\'s loving care',
         duration: 12,
         audioUrl: 'releasing-day.mp3',
+        scriptText: `
+Welcome to this time of peace and reflection with God.
+
+Find a comfortable position, and allow your body to begin settling. Take a deep breath in... and slowly let it out.
+
+As we begin this evening meditation, let's turn our hearts toward the One who holds us. 
+
+The day is coming to a close. You may have experienced challenges, victories, worries, or moments of joy. Whatever this day has brought, know that God has been with you through it all.
+
+Scripture tells us in First Peter chapter five, verse seven: "Cast all your anxiety on him because he cares for you."
+
+Let these words sink deep into your heart. God cares for you. Every concern you carry, every burden that feels heavy on your shoulders - He invites you to release them to Him.
+
+Take a moment now to acknowledge what you need to surrender from this day. Perhaps it's a conversation that didn't go well. Maybe it's worry about tomorrow. Or it could be the pressure to have accomplished more.
+
+Breathe in God's peace... and as you breathe out, release these concerns to Him.
+
+Imagine placing each worry, each burden, into God's loving hands. See Him taking them from you with infinite compassion and care. You don't need to carry these alone.
+
+Jesus said in Matthew eleven, verses twenty-eight through thirty: "Come to me, all you who are weary and burdened, and I will give you rest."
+
+Rest is what He offers you now. Not just physical rest, but soul rest. The deep peace that comes from knowing you are held, you are loved, and you are not alone.
+
+As you prepare for sleep tonight, remember that the same God who watched over you today will watch over you through the night. His love never fails. His faithfulness never ends.
+
+Take one more deep breath, letting His perfect peace fill every part of your being.
+
+You are loved. You are held. You are at peace in God's presence.
+
+Amen.
+        `,
         scriptureReferences: [{
           book: '1 Peter',
           chapter: 5,

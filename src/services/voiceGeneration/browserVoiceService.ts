@@ -190,6 +190,32 @@ export class BrowserVoiceService {
     }
   }
 
+  public async testVoiceWithOptions(text: string, options: VoiceOptions & { voiceName?: string }): Promise<void> {
+    try {
+      // Find the specific voice by name
+      let targetVoice = null;
+      if (options.voiceName) {
+        targetVoice = this.voices.find(v => v.name === options.voiceName);
+      }
+      
+      if (!targetVoice) {
+        targetVoice = this.getBestMeditationVoice();
+      }
+
+      const voiceName = targetVoice?.name || 'Default';
+      console.log(`Testing voice: ${voiceName} with options:`, options);
+      
+      Speech.speak(text, {
+        voice: targetVoice?.identifier,
+        rate: options.rate || 0.7,
+        pitch: options.pitch || 0.9,
+        volume: options.volume || 0.9,
+      });
+    } catch (error) {
+      console.error('Voice test with options failed:', error);
+    }
+  }
+
   public stopSpeaking(): void {
     Speech.stop();
     this.currentUtterance = null;

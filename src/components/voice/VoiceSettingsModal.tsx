@@ -29,8 +29,6 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({
   const { availableVoices } = useSelector((state: RootState) => state.content.audio);
   
   const [selectedVoice, setSelectedVoice] = useState<string>('');
-  const [speechRate, setSpeechRate] = useState(0.7);
-  const [speechPitch, setSpeechPitch] = useState(0.9);
   const [speechVolume, setSpeechVolume] = useState(0.9);
 
   useEffect(() => {
@@ -40,16 +38,35 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({
   }, [visible, dispatch, availableVoices.length]);
 
   const handleTestVoice = (voiceName?: string) => {
-    const testText = "This is how your meditation will sound with these settings.";
-    browserVoiceService.testVoice(testText);
+    const testText = "Welcome to your meditation. Find a comfortable position and take a deep breath. Let God's peace fill your heart as we begin this journey together.";
+    
+    // Use specific voice if provided, or test with current volume
+    if (voiceName) {
+      // Find the specific voice and test it
+      const voice = availableVoices.find(v => v.name === voiceName);
+      if (voice) {
+        browserVoiceService.testVoiceWithOptions(testText, {
+          voiceName: voice.name,
+          rate: 0.7, // Fixed meditation pace
+          pitch: 0.9, // Fixed comfortable pitch
+          volume: speechVolume
+        });
+      }
+    } else {
+      // Test with current settings
+      browserVoiceService.testVoiceWithOptions(testText, {
+        voiceName: selectedVoice,
+        rate: 0.7,
+        pitch: 0.9,
+        volume: speechVolume
+      });
+    }
   };
 
   const handleSaveSettings = () => {
     // Save settings to AsyncStorage or Redux
     const settings = {
       selectedVoice,
-      speechRate,
-      speechPitch,
       speechVolume,
     };
     
@@ -76,72 +93,9 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({
         style={styles.testButton}
         onPress={() => handleTestVoice(item.name)}
       >
-        <Ionicons name="play" size={16} color={colors.primary} />
+        <Ionicons name="play" size={16} color={colors.surface} />
       </TouchableOpacity>
     </TouchableOpacity>
-  );
-
-  const RateSlider = () => (
-    <View style={styles.sliderContainer}>
-      <Text style={styles.sliderLabel}>
-        Speech Rate: {speechRate.toFixed(1)}x
-      </Text>
-      <View style={styles.sliderTrack}>
-        <TouchableOpacity
-          style={styles.sliderButton}
-          onPress={() => setSpeechRate(Math.max(0.3, speechRate - 0.1))}
-        >
-          <Ionicons name="remove" size={16} color={colors.primary} />
-        </TouchableOpacity>
-        <View style={styles.sliderFill}>
-          <View 
-            style={[
-              styles.sliderThumb, 
-              { left: `${((speechRate - 0.3) / 1.7) * 100}%` }
-            ]} 
-          />
-        </View>
-        <TouchableOpacity
-          style={styles.sliderButton}
-          onPress={() => setSpeechRate(Math.min(2.0, speechRate + 0.1))}
-        >
-          <Ionicons name="add" size={16} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.sliderHint}>
-        Slower speeds are better for meditation
-      </Text>
-    </View>
-  );
-
-  const PitchSlider = () => (
-    <View style={styles.sliderContainer}>
-      <Text style={styles.sliderLabel}>
-        Pitch: {speechPitch.toFixed(1)}
-      </Text>
-      <View style={styles.sliderTrack}>
-        <TouchableOpacity
-          style={styles.sliderButton}
-          onPress={() => setSpeechPitch(Math.max(0.5, speechPitch - 0.1))}
-        >
-          <Ionicons name="remove" size={16} color={colors.primary} />
-        </TouchableOpacity>
-        <View style={styles.sliderFill}>
-          <View 
-            style={[
-              styles.sliderThumb, 
-              { left: `${((speechPitch - 0.5) / 1.0) * 100}%` }
-            ]} 
-          />
-        </View>
-        <TouchableOpacity
-          style={styles.sliderButton}
-          onPress={() => setSpeechPitch(Math.min(1.5, speechPitch + 0.1))}
-        >
-          <Ionicons name="add" size={16} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
-    </View>
   );
 
   const VolumeSlider = () => (
@@ -201,17 +155,13 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({
               renderItem={renderVoiceItem}
               keyExtractor={(item, index) => `${item.name}-${index}`}
               style={styles.voiceList}
-              showsVerticalScrollIndicator={false}
-              scrollEnabled={false}
+              showsVerticalScrollIndicator={true}
             />
           </View>
 
-          {/* Speech Settings */}
+          {/* Volume Settings */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Speech Settings</Text>
-            
-            <RateSlider />
-            <PitchSlider />
+            <Text style={styles.sectionTitle}>Volume</Text>
             <VolumeSlider />
           </View>
 
@@ -277,7 +227,7 @@ const styles = {
     marginBottom: 16,
   },
   voiceList: {
-    maxHeight: 300,
+    maxHeight: 250,
   },
   voiceItem: {
     flexDirection: 'row' as const,
@@ -309,7 +259,10 @@ const styles = {
   testButton: {
     padding: 8,
     borderRadius: 16,
-    backgroundColor: colors.primary + '20',
+    backgroundColor: colors.primary,
+    minWidth: 40,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   sliderContainer: {
     marginBottom: 20,

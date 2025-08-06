@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { useDispatch } from 'react-redux';
-import { setCurrentTrack } from '../store/slices/contentSlice';
+import { useNavigation } from '@react-navigation/native';
+import { selectMeditationFromGenre } from '../store/slices/contentSlice';
 import { MeditationList } from '../components/meditation';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import { StorageService } from '../services/storageService';
-import { mockAudioTracks, getMeditationById } from '../services/mockData';
+import { getAllMeditations, getGenreById } from '../services/mockData';
 import { AudioTrack } from '../types/audio';
 import { colors } from '../styles/colors';
 
 export const FavoritesScreen: React.FC = () => {
   const dispatch = useDispatch();
+  const navigation = useNavigation();
   const { loadTrack } = useAudioPlayer();
   const [favorites, setFavorites] = useState<string[]>([]);
   const [favoriteTracks, setFavoriteTracks] = useState<AudioTrack[]>([]);
@@ -21,14 +23,15 @@ export const FavoritesScreen: React.FC = () => {
 
   useEffect(() => {
     // Update favorite tracks when favorites change
+    const allMeditations = getAllMeditations();
     const tracks = favorites.map(favoriteId => {
-      const meditation = getMeditationById(favoriteId);
+      const meditation = allMeditations.find(m => m.id === favoriteId);
       if (meditation) {
         return {
           id: meditation.id,
           title: meditation.title,
           url: meditation.audioUrl,
-          duration: meditation.duration,
+          duration: meditation.duration * 60 * 1000, // Convert minutes to milliseconds
         };
       }
       return null;
@@ -47,8 +50,25 @@ export const FavoritesScreen: React.FC = () => {
   };
 
   const handleTrackPress = async (track: AudioTrack) => {
-    dispatch(setCurrentTrack(track));
-    await loadTrack(track);
+    // Find the meditation and its genre
+    const allMeditations = getAllMeditations();
+    const meditation = allMeditations.find(m => m.id === track.id);
+    
+    if (meditation) {
+      const genre = getGenreById(meditation.genreId);
+      
+      if (genre) {
+        // Set the current meditation and genre in Redux
+        dispatch(selectMeditationFromGenre({ genre, meditation }));
+        await loadTrack(track);
+        
+        // Navigate to meditation preparation screen first
+        (navigation as any).navigate('MeditationPreparation', {
+          meditationId: meditation.id,
+          genreId: genre.id
+        });
+      }
+    }
   };
 
   const handleFavoriteToggle = async (trackId: string) => {

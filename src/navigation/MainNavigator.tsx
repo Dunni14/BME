@@ -7,6 +7,10 @@ import { LibraryScreen } from '../screens/LibraryScreen';
 import { FavoritesScreen } from '../screens/FavoritesScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { SearchScreen } from '../screens/SearchScreen';
+import { GenreDetailScreen } from '../screens/GenreDetailScreen';
+import { MeditationPlayerScreen } from '../screens/MeditationPlayerScreen';
+import { MeditationPreparationScreen } from '../screens/MeditationPreparationScreen';
 import { colors } from '../styles/colors';
 
 const Tab = createBottomTabNavigator();
@@ -80,6 +84,38 @@ export const MainNavigator: React.FC = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen 
+        name="GenreDetail" 
+        component={GenreDetailScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'card',
+        }}
+      />
+      <Stack.Screen 
+        name="Search" 
+        component={SearchScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen 
+        name="MeditationPreparation" 
+        component={MeditationPreparationScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen 
+        name="MeditationPlayer" 
+        component={MeditationPlayerScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
     </Stack.Navigator>
   );
 };

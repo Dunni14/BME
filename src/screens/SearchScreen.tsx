@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { useDispatch } from 'react-redux';
-import { setCurrentTrack } from '../store/slices/contentSlice';
+import { useNavigation } from '@react-navigation/native';
+import { selectMeditationFromGenre } from '../store/slices/contentSlice';
 import { SearchBar } from '../components/common';
 import { MeditationList } from '../components/meditation';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
-import { searchMeditations } from '../services/mockData';
+import { searchMeditations, getGenreById } from '../services/mockData';
 import { AudioTrack } from '../types/audio';
 import { colors } from '../styles/colors';
 import { debounce } from '../utils/helpers';
 
 export const SearchScreen: React.FC = () => {
   const dispatch = useDispatch();
+  const navigation = useNavigation();
   const { loadTrack } = useAudioPlayer();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<AudioTrack[]>([]);
@@ -47,8 +49,25 @@ export const SearchScreen: React.FC = () => {
   }, [searchQuery, debouncedSearch]);
 
   const handleTrackPress = async (track: AudioTrack) => {
-    dispatch(setCurrentTrack(track));
-    await loadTrack(track);
+    // Find the meditation from search results and its genre
+    const results = searchMeditations(searchQuery);
+    const meditation = results.find(m => m.id === track.id);
+    
+    if (meditation) {
+      const genre = getGenreById(meditation.genreId);
+      
+      if (genre) {
+        // Set the current meditation and genre in Redux
+        dispatch(selectMeditationFromGenre({ genre, meditation }));
+        await loadTrack(track);
+        
+        // Navigate to meditation preparation screen first
+        (navigation as any).navigate('MeditationPreparation', {
+          meditationId: meditation.id,
+          genreId: genre.id
+        });
+      }
+    }
   };
 
   const handleFavoriteToggle = (trackId: string) => {

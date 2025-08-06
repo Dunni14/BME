@@ -14,6 +14,7 @@ import { RootState } from '../store';
 import { clearCurrentTrack, generateMeditationAudio } from '../store/slices/contentSlice';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import { browserVoiceService } from '../services/voiceGeneration/browserVoiceService';
+import { VoiceSettingsModal } from '../components/voice/VoiceSettingsModal';
 import { colors } from '../styles/colors';
 import { getGenreById, getMeditationFromGenre } from '../services/mockData';
 
@@ -29,6 +30,7 @@ export const MeditationPlayerScreen: React.FC = () => {
   const { audioState, play, pause, skipForward, skipBackward, seekTo } = useAudioPlayer();
   const { currentTrack } = useSelector((state: RootState) => state.content);
   const [isSliding, setIsSliding] = useState(false);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
 
   const { meditationId, genreId } = route.params as RouteParams;
 
@@ -241,8 +243,11 @@ export const MeditationPlayerScreen: React.FC = () => {
           >
             <Ionicons name="volume-medium" size={24} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.additionalButton}>
-            <Ionicons name="speedometer-outline" size={24} color={colors.textSecondary} />
+          <TouchableOpacity 
+            style={styles.additionalButton}
+            onPress={() => setShowVoiceSettings(true)}
+          >
+            <Ionicons name="settings-outline" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.additionalButton}>
             <Ionicons name="heart-outline" size={24} color={colors.textSecondary} />
@@ -253,6 +258,11 @@ export const MeditationPlayerScreen: React.FC = () => {
       {audioState.error && (
         <Text style={styles.errorText}>{audioState.error}</Text>
       )}
+
+      <VoiceSettingsModal
+        visible={showVoiceSettings}
+        onClose={() => setShowVoiceSettings(false)}
+      />
     </SafeAreaView>
   );
 };

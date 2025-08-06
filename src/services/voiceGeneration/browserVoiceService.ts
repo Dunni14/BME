@@ -143,8 +143,8 @@ export class BrowserVoiceService {
       // Store current utterance for pause/resume functionality
       this.currentUtterance = cleanText;
 
-      // Start speaking with Expo Speech
-      await Speech.speak(cleanText, {
+      // Start speaking with Expo Speech (don't await - let it run in background)
+      Speech.speak(cleanText, {
         voice: voice?.identifier,
         rate: speechRate,
         pitch: options.pitch || 0.9,
@@ -174,7 +174,7 @@ export class BrowserVoiceService {
 
     try {
       console.log(`Testing voice: ${voiceName}`);
-      await Speech.speak(text, {
+      Speech.speak(text, {
         voice: voice?.identifier,
         rate: 0.7,
         pitch: 0.9,

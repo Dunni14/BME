@@ -60,15 +60,20 @@ export const AudioPlayer: React.FC = () => {
       browserVoiceService.pauseSpeaking();
       setIsPlaying(false);
     } else {
-      // For browser TTS, we speak directly rather than playing blob URLs
-      // This is because capturing system audio in browsers is complex
+      // Use TTS if meditation has script text
       if (currentMeditation.scriptText || currentMeditation.description) {
-        browserVoiceService.generateMeditationAudio(currentMeditation)
-          .then(() => setIsPlaying(true))
-          .catch(error => {
-            Alert.alert('Playback Error', 'Failed to play meditation audio');
-          });
+        try {
+          console.log('Starting TTS for meditation:', currentMeditation.title);
+          console.log('Script text length:', currentMeditation.scriptText?.length || 0);
+          setIsPlaying(true);
+          browserVoiceService.generateMeditationAudio(currentMeditation);
+        } catch (error) {
+          console.error('TTS Error:', error);
+          setIsPlaying(false);
+          Alert.alert('Playback Error', 'Failed to play meditation audio');
+        }
       } else {
+        console.log('No script text available for meditation:', currentMeditation.title);
         Alert.alert('No Script Available', 'This meditation does not have a script available for text-to-speech.');
       }
     }

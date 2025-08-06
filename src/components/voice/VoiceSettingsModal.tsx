@@ -34,10 +34,10 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({
   const [speechVolume, setSpeechVolume] = useState(0.9);
 
   useEffect(() => {
-    if (visible) {
+    if (visible && availableVoices.length === 0) {
       dispatch(loadAvailableVoices());
     }
-  }, [visible, dispatch]);
+  }, [visible, dispatch, availableVoices.length]);
 
   const handleTestVoice = (voiceName?: string) => {
     const testText = "This is how your meditation will sound with these settings.";
@@ -199,7 +199,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({
             <FlatList
               data={availableVoices}
               renderItem={renderVoiceItem}
-              keyExtractor={(item) => item.name}
+              keyExtractor={(item, index) => `${item.name}-${index}`}
               style={styles.voiceList}
               showsVerticalScrollIndicator={false}
               scrollEnabled={false}

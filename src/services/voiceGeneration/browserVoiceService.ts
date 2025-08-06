@@ -69,7 +69,12 @@ export class BrowserVoiceService {
   }
 
   public getAvailableVoices(): Array<{name: string, lang: string, quality: string}> {
-    return this.voices.map(voice => ({
+    // Deduplicate voices by name
+    const uniqueVoices = this.voices.filter((voice, index, self) => 
+      index === self.findIndex(v => v.name === voice.name)
+    );
+    
+    return uniqueVoices.map(voice => ({
       name: voice.name,
       lang: voice.language,
       quality: this.getVoiceQuality(voice.name)

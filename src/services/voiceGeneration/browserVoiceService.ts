@@ -1,4 +1,5 @@
 import { Meditation } from '../../types/content';
+import * as Speech from 'expo-speech';
 
 export interface VoiceOptions {
   rate?: number; // 0.1 to 10, default 1
@@ -15,70 +16,53 @@ export interface GeneratedAudio {
 }
 
 export class BrowserVoiceService {
-  private synth: SpeechSynthesis;
-  private voices: SpeechSynthesisVoice[] = [];
+  private voices: Speech.Voice[] = [];
   private isVoicesLoaded: boolean = false;
+  private currentUtterance: string | null = null;
 
   constructor() {
-    this.synth = window.speechSynthesis;
     this.initializeVoices();
   }
 
   private async initializeVoices(): Promise<void> {
-    return new Promise((resolve) => {
-      const loadVoices = () => {
-        this.voices = this.synth.getVoices();
-        this.isVoicesLoaded = true;
-        console.log('Available voices:', this.voices.map(v => `${v.name} (${v.lang})`));
-        resolve();
-      };
-
-      // Voices might be loaded already
-      if (this.synth.getVoices().length > 0) {
-        loadVoices();
-      } else {
-        // Wait for voices to load
-        this.synth.onvoiceschanged = loadVoices;
-        // Fallback timeout
-        setTimeout(loadVoices, 1000);
-      }
-    });
+    try {
+      this.voices = await Speech.getAvailableVoicesAsync();
+      this.isVoicesLoaded = true;
+      console.log('Available voices:', this.voices.map(v => `${v.name} (${v.language})`));
+    } catch (error) {
+      console.error('Failed to load voices:', error);
+      this.isVoicesLoaded = true; // Still allow service to work with default voice
+    }
   }
 
-  private getBestMeditationVoice(): SpeechSynthesisVoice | null {
-    if (!this.isVoicesLoaded) return null;
+  private getBestMeditationVoice(): Speech.Voice | null {
+    if (!this.isVoicesLoaded || this.voices.length === 0) return null;
 
     // Priority order for meditation-friendly voices
     const preferredVoices = [
       // iOS - Excellent quality
       'Samantha', 'Alex', 'Victoria', 'Karen',
       
-      // Android Chrome - Very good
-      'Google US English Female', 'Google US English Male',
-      'en-US-language-female', 'en-US-language-male',
-      
-      // Windows - Good quality
-      'Microsoft Zira Desktop - English (United States)',
-      'Microsoft David Desktop - English (United States)',
-      
-      // macOS - Excellent
-      'Ava', 'Allison', 'Susan',
+      // Android - Very good
+      'en-us-x-sfg#female_1-local', 'en-us-x-sfg#male_1-local',
+      'en-US-language', 'English',
       
       // Generic fallbacks
-      'English (United States)', 'English United States'
+      'com.apple.ttsbundle.Samantha-compact',
+      'com.apple.ttsbundle.siri_female_en-US_compact'
     ];
 
     // Try to find preferred voices
     for (const voiceName of preferredVoices) {
       const voice = this.voices.find(v => 
-        v.name.includes(voiceName) || v.name === voiceName
+        v.name.includes(voiceName) || v.name === voiceName || v.identifier.includes(voiceName)
       );
       if (voice) return voice;
     }
 
     // Fallback: any English voice
     const englishVoice = this.voices.find(v => 
-      v.lang.startsWith('en-US') || v.lang.startsWith('en')
+      v.language.startsWith('en-US') || v.language.startsWith('en')
     );
     
     return englishVoice || this.voices[0] || null;
@@ -87,7 +71,7 @@ export class BrowserVoiceService {
   public getAvailableVoices(): Array<{name: string, lang: string, quality: string}> {
     return this.voices.map(voice => ({
       name: voice.name,
-      lang: voice.lang,
+      lang: voice.language,
       quality: this.getVoiceQuality(voice.name)
     }));
   }
@@ -135,36 +119,46 @@ export class BrowserVoiceService {
     }
 
     const voice = this.getBestMeditationVoice();
-    if (!voice) {
-      throw new Error('No suitable voice found for meditation audio');
+    const voiceName = voice?.name || 'Default';
+
+    // Get text for meditation
+    const text = meditation.scriptText || meditation.description;
+    if (!text) {
+      throw new Error('No text available for meditation');
     }
 
-    // Enhance text for better meditation experience
-    const enhancedText = this.enhanceTextForMeditation(
-      meditation.scriptText || meditation.description
-    );
-
-    // Create utterance with meditation-optimized settings
-    const utterance = new SpeechSynthesisUtterance(enhancedText);
-    utterance.voice = voice;
-    utterance.rate = options.rate || 0.7; // Slower for meditation
-    utterance.pitch = options.pitch || 0.9; // Slightly lower pitch
-    utterance.volume = options.volume || 0.9;
+    // Clean text for speech (remove markdown-style formatting)
+    const cleanText = text
+      .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markdown
+      .replace(/\*(.*?)\*/g, '$1') // Remove italic markdown  
+      .replace(/\n\s*\n/g, '\n\n') // Normalize paragraph breaks
+      .trim();
 
     // Estimate duration (rough calculation)
-    const wordCount = enhancedText.split(' ').length;
-    const estimatedDuration = Math.ceil((wordCount / (120 * utterance.rate)) * 60); // words per minute adjusted for rate
+    const wordCount = cleanText.split(' ').length;
+    const speechRate = options.rate || 0.7;
+    const estimatedDuration = Math.ceil((wordCount / (120 * speechRate)) * 60); // words per minute adjusted for rate
 
     try {
-      // Generate audio blob
-      const audioBlob = await this.createAudioBlob(utterance);
-      const audioUrl = URL.createObjectURL(audioBlob);
+      // Store current utterance for pause/resume functionality
+      this.currentUtterance = cleanText;
 
+      // Start speaking with Expo Speech
+      await Speech.speak(cleanText, {
+        voice: voice?.identifier,
+        rate: speechRate,
+        pitch: options.pitch || 0.9,
+        volume: options.volume || 0.9,
+      });
+
+      // Create a simple blob for compatibility (though not used in RN)
+      const blob = new Blob([cleanText], { type: 'text/plain' });
+      
       return {
-        blob: audioBlob,
-        url: audioUrl,
+        blob,
+        url: '', // Not applicable in React Native
         duration: estimatedDuration,
-        voiceUsed: voice.name
+        voiceUsed: voiceName
       };
 
     } catch (error: any) {
@@ -173,111 +167,35 @@ export class BrowserVoiceService {
     }
   }
 
-  private createAudioBlob(utterance: SpeechSynthesisUtterance): Promise<Blob> {
-    return new Promise((resolve, reject) => {
-      // Check if Web Audio API is supported
-      if (!window.AudioContext && !(window as any).webkitAudioContext) {
-        // Fallback: just speak without recording (for very old browsers)
-        this.synth.speak(utterance);
-        // Create empty blob as fallback
-        resolve(new Blob([], { type: 'audio/wav' }));
-        return;
-      }
-
-      try {
-        // Create audio context for recording
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        const audioContext = new AudioContext();
-        
-        // Create MediaRecorder to capture system audio
-        // Note: This is a simplified version - full implementation would need more complex audio routing
-        this.recordSpeechSynthesis(utterance, audioContext).then(resolve).catch(reject);
-        
-      } catch (error) {
-        console.error('Web Audio API error:', error);
-        // Fallback: speak without recording
-        this.synth.speak(utterance);
-        resolve(new Blob([], { type: 'audio/wav' }));
-      }
-    });
-  }
-
-  private async recordSpeechSynthesis(
-    utterance: SpeechSynthesisUtterance,
-    audioContext: AudioContext
-  ): Promise<Blob> {
-    
-    return new Promise((resolve, reject) => {
-      const chunks: BlobPart[] = [];
-      let mediaRecorder: MediaRecorder;
-
-      // For actual audio recording, we'd need to capture system audio
-      // This is a simplified implementation
-      utterance.onstart = () => {
-        console.log('Speech started');
-      };
-
-      utterance.onend = () => {
-        console.log('Speech ended');
-        // Since we can't easily capture system audio in browsers,
-        // we'll create a placeholder audio blob
-        // In a real implementation, you'd use WebRTC or ask user permission to capture audio
-        
-        // Create a simple audio buffer as placeholder
-        const sampleRate = 44100;
-        const duration = 2; // seconds
-        const numChannels = 1;
-        const numSamples = sampleRate * duration;
-        
-        const audioBuffer = audioContext.createBuffer(numChannels, numSamples, sampleRate);
-        const channelData = audioBuffer.getChannelData(0);
-        
-        // Generate silence (in real app, this would be the captured speech)
-        for (let i = 0; i < numSamples; i++) {
-          channelData[i] = 0;
-        }
-        
-        // Convert to blob (simplified - real implementation would encode properly)
-        const blob = new Blob([new ArrayBuffer(numSamples * 2)], { type: 'audio/wav' });
-        resolve(blob);
-      };
-
-      utterance.onerror = (event) => {
-        reject(new Error(`Speech synthesis error: ${event.error}`));
-      };
-
-      // Start speaking
-      this.synth.speak(utterance);
-    });
-  }
 
   public async testVoice(text: string = "This is a test of the meditation voice."): Promise<void> {
     const voice = this.getBestMeditationVoice();
-    if (!voice) {
-      console.error('No suitable voice available');
-      return;
+    const voiceName = voice?.name || 'Default';
+
+    try {
+      console.log(`Testing voice: ${voiceName}`);
+      await Speech.speak(text, {
+        voice: voice?.identifier,
+        rate: 0.7,
+        pitch: 0.9,
+        volume: 0.9,
+      });
+    } catch (error) {
+      console.error('Voice test failed:', error);
     }
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.voice = voice;
-    utterance.rate = 0.7;
-    utterance.pitch = 0.9;
-    utterance.volume = 0.9;
-
-    console.log(`Testing voice: ${voice.name}`);
-    this.synth.speak(utterance);
   }
 
   public stopSpeaking(): void {
-    this.synth.cancel();
+    Speech.stop();
+    this.currentUtterance = null;
   }
 
   public pauseSpeaking(): void {
-    this.synth.pause();
+    Speech.pause();
   }
 
   public resumeSpeaking(): void {
-    this.synth.resume();
+    Speech.resume();
   }
 }
 

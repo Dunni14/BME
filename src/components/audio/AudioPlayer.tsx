@@ -28,14 +28,8 @@ export const AudioPlayer: React.FC = () => {
   const [canUseVoice, setCanUseVoice] = useState(true);
 
   useEffect(() => {
-    // Check if browser supports speech synthesis
-    if (typeof window !== 'undefined' && !window.speechSynthesis) {
-      setCanUseVoice(false);
-      Alert.alert(
-        'Voice Not Supported',
-        'Your browser does not support text-to-speech functionality.'
-      );
-    }
+    // TTS is supported in React Native via Expo Speech
+    setCanUseVoice(true);
   }, []);
 
   useEffect(() => {
